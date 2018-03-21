@@ -300,6 +300,13 @@ class XMPPOverTLSConnector(BaseConnector):
             base_logger=base_logger,
         )
 
+        if base_logger is not None:
+            logger = base_logger.getChild(type(self).__name__)
+        else:
+            logger = logging.getLogger(".".join([
+                __name__, type(self).__qualname__,
+            ]))
+
         verifier = metadata.certificate_verifier_factory()
         yield from verifier.pre_handshake(
             domain,
@@ -310,6 +317,20 @@ class XMPPOverTLSConnector(BaseConnector):
 
         def context_factory(transport):
             ssl_context = metadata.ssl_context_factory()
+
+            if hasattr(ssl_context, "set_alpn_protos"):
+                try:
+                    ssl_context.set_alpn_protos([b'xmpp-client'])
+                except NotImplementedError:
+                    logger.warning(
+                        "the underlying OpenSSL library does not support ALPN"
+                    )
+            else:
+                logger.warning(
+                    "OpenSSL.SSL.Context lacks set_alpn_protos - "
+                    "please update pyOpenSSL to a recent version"
+                )
+
             verifier.setup_context(ssl_context, transport)
             return ssl_context
 
